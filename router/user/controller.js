@@ -4,17 +4,26 @@ const config = require('../../config')
 
 module.exports = {
   login: (req, res) => {
-    model.findOne({email: req.body.email}, (err, user) => {
-      if (err) throw err
+    model.findOne({ email: req.body.email }, (err, user) => {
+      if (err) {
+        res.status(500).send({ auth: false, msg: err })
+        return
+      }
+
+      if (!user) {
+        res.send({ auth: false, mailError: true, msg: "Email not found" })
+        return
+      }
 
       user.comparePassword(req.body.password, (err, isMatch) => {
         if (err) throw err
         if (isMatch) {
-          let token = jwt.sign({id: user._id}, config.secret, {expiresIn: 86400})
+          let token = jwt.sign({ id: user._id }, config.secret, { expiresIn: 86400 })
+          res.status(200).send({ auth: true, token })
 
-          res.status(200).send({msg: 'login successful', token})
+          return
         } else {
-          res.status(500).send({msg: 'password did not match'})
+          res.send({ auth: false, passError: true, msg: "Password is incorrect" })
         }
       })
     })
@@ -30,10 +39,16 @@ module.exports = {
 
     newUser.save()
       .then(result => {
-        res.status(200).send({msg: 'register successful', user_id: result._id})
+        let token = jwt.sign({ id: result._id }, config.secret, { expiresIn: 86400 })
+        res.status(200).send({ auth: true, token })
       })
       .catch(err => {
-        res.status(500).send({msg: 'register Unsuccessful'})
+        if (err.code === 11000) {
+          res.send({ auth: false, msg: "Email already exists.." })
+          return
+        }
+
+        res.send({ auth: false, msg: "An internal server error has occurred" })
       })
 
   },
